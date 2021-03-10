@@ -343,14 +343,6 @@ int main(int argc, char ** argv) {
 		}
 	}
 
-	/* change directory to music base directory */
-	if (music_dir != NULL) {
-		if (chdir(music_dir) == -1) {
-			fprintf(stderr, "%s: Could not change directory to: %s\n", program, music_dir);
-			music_dir = NULL;
-		}
-	}
-
 #ifdef HAVE_LIBAV
 	/* libav */
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 9, 100)
@@ -405,6 +397,8 @@ int main(int argc, char ** argv) {
 	sd_notify(0, "READY=1\nSTATUS=Waiting for mpd event...");
 #endif
 
+	bool cd_succeeded = false;
+
 	while (doexit == 0 && mpd_run_idle_mask(conn, MPD_IDLE_PLAYER)) {
 		mpd_command_list_begin(conn, true);
 		mpd_send_status(conn);
@@ -448,7 +442,16 @@ int main(int argc, char ** argv) {
 
 			uri = mpd_song_get_uri(song);
 
-			if (music_dir != NULL && uri != NULL) {
+			/* change directory to music base directory */
+			if (!cd_succeeded && music_dir != NULL) {
+				if (chdir(music_dir) == -1) {
+					fprintf(stderr, "%s: Could not change directory to: %s\n", program, music_dir);
+				} else {
+					cd_succeeded = true;
+				}
+			}
+
+			if (cd_succeeded && uri != NULL) {
 				GdkPixbuf * copy;
 
 				pixbuf = retrieve_artwork(music_dir, uri);
