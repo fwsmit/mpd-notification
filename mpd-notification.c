@@ -367,6 +367,11 @@ int main(int argc, char ** argv) {
 
 	conn = mpd_connection_new(mpd_host, mpd_port, mpd_timeout * 1000);
 
+	// error handling
+	if (conn == NULL) {
+		fprintf(stderr, "Out of memory\n");
+		goto out30;
+	}
 	if (mpd_connection_get_error(conn) != MPD_ERROR_SUCCESS) {
 		fprintf(stderr,"%s: %s\n", program, mpd_connection_get_error_message(conn));
 		goto out30;
