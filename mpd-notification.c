@@ -17,6 +17,7 @@
  */
 
 #include "mpd-notification.h"
+#include "cache.h"
 
 const static char optstring[] = "hH:m:op:s:t:vV";
 const static struct option options_long[] = {
@@ -42,9 +43,6 @@ struct mpd_connection * conn = NULL;
 uint8_t doexit = 0;
 uint8_t verbose = 0;
 uint8_t oneline = 0;
-#ifdef HAVE_LIBAV
-	magic_t magic = NULL;
-#endif
 
 /*** received_signal ***/
 void received_signal(int signal) {
@@ -73,139 +71,6 @@ void received_signal(int signal) {
 		default:
 			fprintf(stderr, "%s: Reveived signal %s (%d), no idea what to do...\n", program, strsignal(signal), signal);
 	}
-}
-
-/*** retrieve_artwork ***/
-GdkPixbuf * retrieve_artwork(const char * music_dir, const char * uri) {
-	GdkPixbuf * pixbuf = NULL;
-	char * uri_path = NULL, * imagefile = NULL;
-	DIR * dir;
-	struct dirent * entry;
-	regex_t regex;
-
-#ifdef HAVE_LIBAV
-	int i;
-	const char *magic_mime;
-	AVFormatContext * pFormatCtx = NULL;
-	GdkPixbufLoader * loader;
-
-	/* try album artwork first */
-	if ((uri_path = malloc(strlen(music_dir) + strlen(uri) + 2)) == NULL) {
-		fprintf(stderr, "%s: malloc() failed.\n", program);
-		goto fail;
-	}
-
-	sprintf(uri_path, "%s/%s", music_dir, uri);
-
-	if ((magic_mime = magic_file(magic, uri_path)) == NULL) {
-		fprintf(stderr, "%s: We did not get a MIME type...\n", program);
-		goto image;
-	}
-
-	if (verbose > 0)
-		printf("%s: MIME type for %s is: %s\n", program, uri_path, magic_mime);
-
-	if (strcmp(magic_mime, "audio/mpeg") != 0)
-		goto image;
-
-	if ((pFormatCtx = avformat_alloc_context()) == NULL) {
-		fprintf(stderr, "%s: avformat_alloc_context() failed.\n", program);
-		goto image;
-	}
-
-	if (avformat_open_input(&pFormatCtx, uri_path, NULL, NULL) != 0) {
-		fprintf(stderr, "%s: avformat_open_input() failed.\n", program);
-		goto image;
-	}
-
-	if (pFormatCtx->iformat->read_header(pFormatCtx) < 0) {
-		fprintf(stderr, "%s: Could not read the format header.\n", program);
-		goto image;
-	}
-
-	/* find the first attached picture, if available */
-	for (i = 0; i < pFormatCtx->nb_streams; i++) {
-		if (pFormatCtx->streams[i]->disposition & AV_DISPOSITION_ATTACHED_PIC) {
-			AVPacket pkt;
-
-			if (verbose > 0)
-				printf("%s: Found artwork in media file.\n", program);
-
-			pkt = pFormatCtx->streams[i]->attached_pic;
-
-			loader = gdk_pixbuf_loader_new();
-			if (gdk_pixbuf_loader_write(loader, pkt.data, pkt.size, NULL) == FALSE) {
-				fprintf(stderr, "%s: gdk_pixbuf_loader_write() failed parsing buffer.\n", program);
-				goto image;
-			}
-
-			if ((pixbuf = gdk_pixbuf_loader_get_pixbuf(loader)) == NULL) {
-				fprintf(stderr, "%s: gdk_pixbuf_loader_get_pixbuf() failed creating pixbuf.\n", program);
-				goto image;
-			}
-
-			gdk_pixbuf_loader_close(loader, NULL);
-			goto done;
-		}
-	}
-
-image:
-#endif
-
-	/* cut the file name from path for current directory */
-	*strrchr(uri_path, '/') = 0;
-
-	if ((dir = opendir(uri_path)) == NULL) {
-		fprintf(stderr, "%s: Could not open directory '%s': %s", program, uri_path, strerror(errno));
-		goto fail;
-	}
-
-	if (regcomp(&regex, REGEX_ARTWORK, REG_NOSUB + REG_ICASE) != 0) {
-		fprintf(stderr, "%s: Could not compile regex.\n", program);
-		goto fail;
-	}
-
-	while ((entry = readdir(dir))) {
-		if (*entry->d_name == '.')
-			continue;
-
-		if (regexec(&regex, entry->d_name, 0, NULL, 0) == 0) {
-			if (verbose > 0)
-				printf("%s: Found image file: %s\n", program, entry->d_name);
-
-			if ((imagefile = malloc(strlen(uri_path) + strlen(entry->d_name) + 2)) == NULL) {
-				fprintf(stderr, "%s: malloc() failed.\n", program);
-				goto fail;
-			}
-
-			sprintf(imagefile, "%s/%s", uri_path, entry->d_name);
-
-			if ((pixbuf = gdk_pixbuf_new_from_file(imagefile, NULL)) == NULL) {
-				fprintf(stderr, "%s: gdk_pixbuf_new_from_file() failed loading file: %s\n",
-						program, imagefile);
-				goto fail;
-			}
-
-			free(imagefile);
-			break;
-		}
-	}
-
-	regfree(&regex);
-	closedir(dir);
-
-fail:
-#ifdef HAVE_LIBAV
-done:
-	if (pFormatCtx != NULL) {
-		avformat_close_input(&pFormatCtx);
-		avformat_free_context(pFormatCtx);
-	}
-#endif
-
-	free(uri_path);
-
-	return pixbuf;
 }
 
 /*** append_string ***/
@@ -351,30 +216,11 @@ int main(int argc, char ** argv) {
 		}
 	}
 
-#ifdef HAVE_LIBAV
-	/* libav */
-#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 9, 100)
-	av_register_all();
-#endif
-
-	/* only fatal messages from libav */
-	if (verbose == 0)
-		av_log_set_level(AV_LOG_FATAL);
-
-	if ((magic = magic_open(MAGIC_MIME_TYPE)) == NULL) {
-		fprintf(stderr, "%s: Could not initialize magic library.\n", program);
-		goto out40;
-	}
-
-	if (magic_load(magic, NULL) != 0) {
-		fprintf(stderr, "%s: Could not load magic database: %s\n", program, magic_error(magic));
-		magic_close(magic);
-		goto out30;
-	}
-#endif
-
 	conn = mpd_connection_new(mpd_host, mpd_port, mpd_timeout * 1000);
 
+	if (!av_init()) {
+		goto out40;
+	}
 	if (mpd_connection_get_error(conn) != MPD_ERROR_SUCCESS) {
 		fprintf(stderr,"%s: %s\n", program, mpd_connection_get_error_message(conn));
 		goto out30;
@@ -536,8 +382,7 @@ out20:
 
 out30:
 #ifdef HAVE_LIBAV
-	if (magic != NULL)
-		magic_close(magic);
+	av_magic_close();
 out40:
 #endif
 
@@ -549,4 +394,12 @@ out40:
 #endif
 
 	return rc;
+}
+
+const char * get_program_name() {
+	return program;
+}
+
+uint8_t get_verbose() {
+	return verbose;
 }

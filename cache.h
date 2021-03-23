@@ -16,45 +16,21 @@
  *
  */
 
-#ifndef MPD_NOTIFICATION_H
-#define MPD_NOTIFICATION_H
+#ifndef CACHE_H
+#define CACHE_H
 
 #define _GNU_SOURCE
 
-#include <getopt.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
-/* systemd headers */
-#ifdef HAVE_SYSTEMD
-#include <systemd/sd-daemon.h>
-#endif
-
-#include <iniparser.h>
 #include <libnotify/notify.h>
-#include <mpd/client.h>
+#include <stdbool.h>
 
-#include "config.h"
-#include "version.h"
+struct song_data;
 
-#define PROGNAME	"mpd-notification"
+/*** retrieve_artwork ***/
+GdkPixbuf * retrieve_artwork(const char * music_dir, const char * uri);
 
-#define OPT_FILE_WORKAROUND UCHAR_MAX + 1
+bool av_init();
+void av_magic_close();
+const char * av_get_program_name();
 
-/*** received_signal ***/
-void received_signal(int signal);
-
-/*** append_string ***/
-char * append_string(char * string, const char * format, const char delim, const char * s);
-
-const char * get_program_name();
-
-uint8_t get_verbose();
-
-/*** main ***/
-int main(int argc, char ** argv);
-
-#endif /* MPD_NOTIFICATION_H */
+#endif /* CACHE_H */
