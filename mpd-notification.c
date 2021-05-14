@@ -309,7 +309,6 @@ int main(int argc, char ** argv) {
 							(x > y ? scale : scale * x / y),
 							(y > x ? scale : scale * y / x),
 							GDK_INTERP_BILINEAR)) != NULL) {
-						g_object_unref(pixbuf);
 						pixbuf = copy;
 					}
 				}
@@ -355,7 +354,7 @@ nonotification:
 			free(notifystr);
 			notifystr = NULL;
 		}
-		if (pixbuf != NULL) {
+		if (pixbuf != NULL && scale > 0) {
 			g_object_unref(pixbuf);
 			pixbuf = NULL;
 		}

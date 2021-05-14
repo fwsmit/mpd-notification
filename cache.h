@@ -26,7 +26,13 @@
 
 struct song_data;
 
-/*** retrieve_artwork ***/
+/**
+ * Retrieves artwork for the given uri. The uri should be a subpath of the
+ * music_dir. This function does not get the pixbuf from disk every time, but
+ * instead caches the artworks.
+ *
+ * Returns a pixbuf which should not be freed by the caller.
+ */
 GdkPixbuf * retrieve_artwork(const char * music_dir, const char * uri);
 
 bool av_init();

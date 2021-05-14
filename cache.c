@@ -16,6 +16,7 @@
  *
  */
 
+#define _POSIX_C_SOURCE 200809L
 #include <mpd/client.h>
 
 #ifdef HAVE_LIBAV
@@ -23,6 +24,7 @@
 #include <magic.h>
 #endif
 #include <regex.h>
+#include <string.h>
 
 #include "mpd-notification.h"
 #include "cache.h"
@@ -38,7 +40,7 @@ struct song_data {
 };
 
 /*** retrieve_artwork ***/
-GdkPixbuf * retrieve_artwork(const char * music_dir, const char * uri) {
+GdkPixbuf * retrieve_artwork_from_disk(const char * music_dir, const char * uri) {
 	GdkPixbuf * pixbuf = NULL;
 	char * uri_path = NULL, * imagefile = NULL;
 	DIR * dir;
@@ -167,6 +169,38 @@ done:
 
 	free(uri_path);
 
+	return pixbuf;
+}
+
+GdkPixbuf * pixbuf_cache = NULL; // A single pixbuf that's cached
+char * uri_cache = NULL; // The uri of the cached pixbuf
+
+// Add a pixbuf to the cache
+void add_to_cache(GdkPixbuf * pixbuf, const char * uri) {
+	if (pixbuf_cache)
+	{
+		printf("Replacing object from the cache\n");
+		g_object_unref(pixbuf_cache);
+	}
+
+	pixbuf_cache = pixbuf;
+
+	if (uri_cache)
+		free(uri_cache);
+
+	uri_cache = strdup(uri);
+}
+
+GdkPixbuf * retrieve_artwork(const char * music_dir, const char * uri) {
+	printf("Retrieving artwork %s\n", uri);
+	printf("Cached artwork %s\n", uri_cache);
+	if (uri && uri_cache && strcmp(uri, uri_cache) == 0) {
+		printf("Getting icon from cache\n");
+		return pixbuf_cache;
+	}
+
+	GdkPixbuf * pixbuf = retrieve_artwork_from_disk(music_dir, uri);
+	add_to_cache(pixbuf, uri);
 	return pixbuf;
 }
 
