@@ -252,6 +252,7 @@ int main(int argc, char ** argv) {
 #endif
 
 	while (doexit == 0 && mpd_run_idle_mask(conn, MPD_IDLE_PLAYER)) {
+		printf("Waking up from idle\n");
 		mpd_command_list_begin(conn, true);
 		mpd_send_status(conn);
 		mpd_send_current_song(conn);
@@ -267,11 +268,13 @@ int main(int argc, char ** argv) {
 				notify_notification_show(notification, NULL);
 			}
 
+			printf("Waiting for mpd response\n");
 			mpd_response_next(conn);
 
 			song = mpd_recv_song(conn);
 
 			title = mpd_song_get_tag(song, MPD_TAG_TITLE, 0);
+			printf("Got mpd response\n");
 
 			/* ignore if we have no title */
 			if (title == NULL)

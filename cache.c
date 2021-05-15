@@ -33,6 +33,8 @@
 	magic_t magic = NULL;
 #endif
 
+#define CACHE_SIZE 3
+
 struct song_data {
 	struct mpd_song * song;
 	unsigned id;
@@ -172,34 +174,52 @@ done:
 	return pixbuf;
 }
 
-GdkPixbuf * pixbuf_cache = NULL; // A single pixbuf that's cached
-char * uri_cache = NULL; // The uri of the cached pixbuf
+int cache_tail = 0;
+GdkPixbuf * pixbuf_cache[CACHE_SIZE]; // A single pixbuf that's cached
+char * uri_cache[CACHE_SIZE]; // The uri of the cached pixbuf
 
 // Add a pixbuf to the cache
 void add_to_cache(GdkPixbuf * pixbuf, const char * uri) {
-	if (pixbuf_cache)
+	if (pixbuf_cache[cache_tail])
 	{
 		printf("Replacing object from the cache\n");
-		g_object_unref(pixbuf_cache);
+		g_object_unref(pixbuf_cache[cache_tail]);
 	}
 
-	pixbuf_cache = pixbuf;
+	pixbuf_cache[cache_tail] = pixbuf;
 
-	if (uri_cache)
-		free(uri_cache);
+	if (uri_cache[cache_tail])
+		free(uri_cache[cache_tail]);
 
-	uri_cache = strdup(uri);
+	uri_cache[cache_tail] = strdup(uri);
+
+	cache_tail = (cache_tail+1) % CACHE_SIZE;
+}
+
+GdkPixbuf * retrieve_artwork_from_cache(const char * uri) {
+	if (!uri)
+		return NULL;
+
+	for (size_t i = 0; i < CACHE_SIZE; i++) {
+		if (uri_cache[i] && strcmp(uri, uri_cache[i]) == 0)
+			return pixbuf_cache[i];
+	}
+	return NULL;
 }
 
 GdkPixbuf * retrieve_artwork(const char * music_dir, const char * uri) {
 	printf("Retrieving artwork %s\n", uri);
-	printf("Cached artwork %s\n", uri_cache);
-	if (uri && uri_cache && strcmp(uri, uri_cache) == 0) {
-		printf("Getting icon from cache\n");
-		return pixbuf_cache;
+	for (size_t i = 0; i < CACHE_SIZE; i++) {
+		printf("Cached artworks [%zu] %s\n", i, uri_cache[i]);
 	}
 
-	GdkPixbuf * pixbuf = retrieve_artwork_from_disk(music_dir, uri);
+	GdkPixbuf * pixbuf = retrieve_artwork_from_cache(uri);
+	if (pixbuf) {
+		printf("Getting icon from cache\n");
+		return pixbuf;
+	}
+
+	pixbuf = retrieve_artwork_from_disk(music_dir, uri);
 	add_to_cache(pixbuf, uri);
 	return pixbuf;
 }
